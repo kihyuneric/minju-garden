@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>민주의 우정 정원 🌸</title>
 <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root {
   --pink1: #D63F82;
@@ -852,11 +853,47 @@ function lsGet(key, fallback){
 function lsSet(key, value){
   try{ localStorage.setItem(key, value); }
   catch(e){ _store[key] = value; }
+  if(key.startsWith('mj_') && _sbClient) sbSet(key, value);
 }
 function lsDel(key){
   try{ localStorage.removeItem(key); }
   catch(e){ delete _store[key]; }
 }
+// ─── Supabase Cloud Sync ───────────────────────────
+var _SB_URL = 'https://eqvpubntalikjxcjhpln.supabase.co';
+var _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxdnB1Ym50YWxpa2p4Y2pocGxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMDk3NTIsImV4cCI6MjA4ODc4NTc1Mn0.YJRDydA8Bc8Q1vl-IQ1Nxd5uiEh8-6Dv7vgH60DKHrI';
+var _sbClient = null;
+var _deviceId = null;
+(function(){
+  try {
+    _sbClient = supabase.createClient(_SB_URL, _SB_KEY);
+    _deviceId = lsGet('mj_device_id', null);
+    if(!_deviceId){
+      _deviceId = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      try{ localStorage.setItem('mj_device_id', _deviceId); } catch(e){}
+    }
+  } catch(e){ console.warn('Supabase init failed', e); }
+})();
+async function sbSet(key, value){
+  if(!_sbClient || !_deviceId) return;
+  try {
+    await _sbClient.from('garden_data').upsert(
+      {device_id: _deviceId, key: key, value: String(value), updated_at: new Date().toISOString()},
+      {onConflict: 'device_id,key'}
+    );
+  } catch(e){ console.warn('sbSet error', e); }
+}
+async function sbLoadAll(){
+  if(!_sbClient || !_deviceId) return {};
+  try {
+    var {data, error} = await _sbClient.from('garden_data').select('key,value').eq('device_id', _deviceId);
+    if(error || !data) return {};
+    var result = {};
+    data.forEach(function(row){ result[row.key] = row.value; });
+    return result;
+  } catch(e){ return {}; }
+}
+// ──────────────────────────────────────────────────
 function safeParse(str, fallback){
   try{ var v = JSON.parse(str); return (v !== null && v !== undefined) ? v : fallback; }
   catch(e){ return fallback; }
@@ -2730,6 +2767,36 @@ function init(){
   renderStoryList(); // detective story list
 }
 init();
+// ─── Load cloud data and refresh ───────────────────
+(async function(){
+  var cloudData = await sbLoadAll();
+  var keys = ['mj_allies','mj_xp','mj_rels','mj_pos','mj_det','mj_daily','mj_stories','mj_diary'];
+  var changed = false;
+  keys.forEach(function(k){
+    if(cloudData[k] !== undefined){
+      try{ localStorage.setItem(k, cloudData[k]); } catch(e){ _store[k] = cloudData[k]; }
+      changed = true;
+    }
+  });
+  if(changed){
+    allies    = safeParse(lsGet('mj_allies', '[]'), []);
+    xp        = parseInt(lsGet('mj_xp', '0'), 10) || 0;
+    classRels = safeParse(lsGet('mj_rels', '[]'), []);
+    var _rp = safeParse(lsGet('mj_pos', '{}'), {});
+    mapPos = {};
+    Object.keys(_rp).forEach(function(k){
+      var nk = (k !== 'joy' && !isNaN(Number(k))) ? Number(k) : k;
+      mapPos[nk] = _rp[k];
+    });
+    detLogs = safeParse(lsGet('mj_det', '[]'), []);
+    dailyLog = safeParse(lsGet('mj_daily', '{}'), {});
+    detMyStories = safeParse(lsGet('mj_stories', '[]'), []);
+    diaries = safeParse(lsGet('mj_diary', '[]'), []);
+    init();
+    showToast('☁️ 클라우드 데이터 로드 완료!');
+  }
+})();
+// ───────────────────────────────────────────────────
 // ===================================================
 // UNIVERSAL EDIT SYSTEM
 // Opens from anywhere: ally list card, modal, canvas nodes
