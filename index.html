@@ -354,7 +354,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--t
 .rel-history-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
 .rel-history-item:last-child{border:none}
 .rel-history-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:3px}
-#mapCanvas{width:100%!important;height:auto!important;touch-action:pan-y pinch-zoom}
+#mapCanvas{width:100%!important;height:auto!important;touch-action:none}
 #netCanvas{width:100%!important;height:auto!important;touch-action:none}
 .mbox{padding:14px 14px 20px!important}
 .mtab{font-size:10px!important;padding:7px 3px!important}
@@ -1321,6 +1321,55 @@ document.getElementById('mapCanvas').addEventListener('click',function(e){
   if(editSelA===cid){editSelA=null;document.getElementById('relEd').style.display='none';drawClassMap();return;}
   showRelEdFull(editSelA,cid);editSelA=null;
 });
+// ── 반 관계망 터치 드래그 ────────────────────────────
+(function(){
+  var mc=document.getElementById('mapCanvas'), _md=null;
+  function _mPos(e,t){
+    var r=mc.getBoundingClientRect(),sx=mc.width/r.width,sy=mc.height/r.height;
+    var s=t?e.touches[0]:(e.changedTouches?e.changedTouches[0]:e);
+    return {x:(s.clientX-r.left)*sx,y:(s.clientY-r.top)*sy};
+  }
+  function _mHit(mx,my){
+    var jp=mapPos['joy'];if(jp&&Math.hypot(mx-jp.x,my-jp.y)<24)return 'joy';
+    for(var i=0;i<allies.length;i++){var a=allies[i],p=mapPos[a.id];if(p&&Math.hypot(mx-p.x,my-p.y)<(a.cls==='ext'?18:22))return a.id;}
+    return null;
+  }
+  mc.addEventListener('touchstart',function(e){
+    var pos=_mPos(e,true),hit=_mHit(pos.x,pos.y);
+    if(hit==='joy'){e.preventDefault();return;}
+    if(hit!==null){
+      var p=mapPos[hit];if(!p)return;
+      _md={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};
+      e.preventDefault();
+    }
+  },{passive:false});
+  mc.addEventListener('touchmove',function(e){
+    if(!_md)return;
+    e.preventDefault();
+    var pos=_mPos(e,true);
+    var nx=Math.max(16,Math.min(MAP_W-16,pos.x-_md.ox));
+    var ny=Math.max(16,Math.min(MAP_H-16,pos.y-_md.oy));
+    mapPos[_md.id]={x:nx,y:ny};
+    _md.moved=true;
+    drawClassMap();
+  },{passive:false});
+  mc.addEventListener('touchend',function(e){
+    if(!_md)return;
+    if(_md.moved){
+      savePos();
+    } else {
+      var hit=_md.id;
+      if(mapMode==='view'||mapMode==='focus'){openUnivEdit(hit);}
+      else{
+        if(!editSelA){editSelA=hit;drawClassMap();showRelEdPrompt();}
+        else if(editSelA===hit){editSelA=null;document.getElementById('relEd').style.display='none';drawClassMap();}
+        else{showRelEdFull(editSelA,hit);editSelA=null;}
+      }
+    }
+    _md=null;
+  });
+})();
+// ─────────────────────────────────────────────────────
 function showRelEdPrompt(){
   document.getElementById('relEd').style.display='block';
   const n=editSelA==='joy'?'민주':(allies.find(a=>a.id===editSelA)||{name:'?'}).name;
