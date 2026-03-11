@@ -1346,54 +1346,87 @@ function drawNetwork(){
   var n=ea.length||1, ang=(2*Math.PI*i/n)-Math.PI/4;
   netPos[a.id]={x:CX+oR*Math.cos(ang), y:CY+oR*Math.sin(ang)};
   });
+  // ── 노드 겹침 방지: 반발력 시뮬레이션 ─────────────────
+  var allNodeIds = Object.keys(netPos);
+  var MIN_NODE_DIST = 52;
+  var pad = 30;
+  for(var _iter=0;_iter<60;_iter++){
+    for(var _i=0;_i<allNodeIds.length;_i++){
+      for(var _j=_i+1;_j<allNodeIds.length;_j++){
+        var _pa=netPos[allNodeIds[_i]], _pb=netPos[allNodeIds[_j]];
+        var _dx=_pb.x-_pa.x, _dy=_pb.y-_pa.y;
+        var _d=Math.sqrt(_dx*_dx+_dy*_dy)||0.01;
+        if(_d<MIN_NODE_DIST){
+          var _push=(MIN_NODE_DIST-_d)/2+1;
+          var _nx=_dx/_d, _ny=_dy/_d;
+          _pa.x-=_nx*_push; _pa.y-=_ny*_push;
+          _pb.x+=_nx*_push; _pb.y+=_ny*_push;
+        }
+      }
+    }
+  }
+  // 캔버스 경계 안으로 클램프
+  allNodeIds.forEach(function(k){
+    var _p=netPos[k];
+    _p.x=Math.max(pad,Math.min(W-pad,_p.x));
+    _p.y=Math.max(pad,Math.min(H-pad,_p.y));
+  });
+  // ────────────────────────────────────────────────────
   if(ea.length){
   ctx.beginPath(); ctx.arc(CX,CY,oR+10,0,Math.PI*2);
   ctx.strokeStyle='rgba(255,224,102,0.3)'; ctx.lineWidth=1.5;
   ctx.setLineDash([5,8]); ctx.stroke(); ctx.setLineDash([]);
   }
   var focusMode = (netMode === 'focus');
+  // ── 관계선: relScore 기반 굵기 ──────────────────────
   allies.forEach(function(a){
   var p = netPos[a.id]; if(!p) return;
-  var hasLink = a.rel.some(function(r){
-  return ['greeted','talked','joyHi','joyTalk','played'].includes(r);
+  var score = a.relScore || 0;
+  var isBest = classRels.some(function(r){
+    return ((r.a===-1&&r.b===a.id)||(r.a===a.id&&r.b===-1)) && r.type==='best';
   });
-  if(focusMode && !hasLink) return;
-  if(!hasLink) return;
-  var isPlayed = a.rel.includes('played');
-  var isBest   = classRels.some(function(r){
-  return ((r.a===-1&&r.b===a.id)||(r.a===a.id&&r.b===-1)) && r.type==='best';
-  });
-  var isExt = a.cls==='ext';
+  var hasAnyLink = score > 0 || isBest;
+  if(!hasAnyLink) return;
+  if(focusMode && score < 10 && !isBest) return;
   var rs = a.relStatus||'stable';
   var isDrifting = rs==='drifting';
   var isDistant  = rs==='distant';
+  var isExt = a.cls==='ext';
+  // 굵기: score 10→0.8, 30→1.5, 50→2.5, 70→3.5, 100→5.0
+  var lw = Math.max(0.8, Math.min(5.0, score / 20));
   ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(p.x,p.y);
   if(isDistant){
-  ctx.strokeStyle='rgba(180,160,200,0.25)'; ctx.lineWidth=1.2; ctx.setLineDash([2,9]);
+    ctx.strokeStyle='rgba(180,160,200,0.2)'; ctx.lineWidth=0.8; ctx.setLineDash([2,9]);
   } else if(isDrifting){
-  ctx.strokeStyle='rgba(255,179,71,0.45)'; ctx.lineWidth=1.5; ctx.setLineDash([4,6]);
+    ctx.strokeStyle='rgba(255,179,71,0.45)'; ctx.lineWidth=lw; ctx.setLineDash([4,6]);
   } else if(isBest){
-  ctx.strokeStyle='rgba(255,133,179,0.85)'; ctx.lineWidth=3.5; ctx.setLineDash([]);
-  } else if(isPlayed){
-  ctx.strokeStyle='rgba(125,232,208,0.7)'; ctx.lineWidth=2.5; ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(255,133,179,0.85)'; ctx.lineWidth=Math.max(lw,3.5); ctx.setLineDash([]);
+  } else if(score>=70){
+    ctx.strokeStyle='rgba(255,133,179,0.75)'; ctx.lineWidth=lw; ctx.setLineDash([]);
+  } else if(score>=40){
+    ctx.strokeStyle='rgba(125,232,208,0.75)'; ctx.lineWidth=lw; ctx.setLineDash([]);
   } else if(isExt){
-  ctx.strokeStyle='rgba(255,224,102,0.6)'; ctx.lineWidth=1.8; ctx.setLineDash([3,7]);
+    ctx.strokeStyle='rgba(255,224,102,0.55)'; ctx.lineWidth=lw; ctx.setLineDash([3,6]);
   } else {
-  ctx.strokeStyle='rgba(200,160,230,0.45)'; ctx.lineWidth=1.5; ctx.setLineDash([4,5]);
+    ctx.strokeStyle='rgba(200,160,230,0.5)'; ctx.lineWidth=lw; ctx.setLineDash([4,5]);
   }
   ctx.stroke(); ctx.setLineDash([]);
-  if(isBest||isPlayed||isDrifting){
+  // 중간 점수 표시 (40점 이상)
   var mx=(CX+p.x)/2, my=(CY+p.y)/2;
-  ctx.font='10px serif';
-  ctx.textAlign='center';
-  ctx.fillText(isBest?'💕':isDrifting?'🌥️':'🎲',mx,my);
+  if(isBest){ ctx.font='10px serif'; ctx.textAlign='center'; ctx.fillText('💕',mx,my); }
+  else if(isDrifting){ ctx.font='10px serif'; ctx.textAlign='center'; ctx.fillText('🌥️',mx,my); }
+  else if(score>=40){
+    ctx.font='bold 8px Noto Sans KR'; ctx.textAlign='center';
+    ctx.fillStyle='rgba(90,48,96,0.6)'; ctx.fillText(score+'점',mx,my);
   }
   });
+  // ─────────────────────────────────────────────────────
   function nodeAlpha(a){
   var rs=a.relStatus||'stable';
   if(rs==='distant') return focusMode ? 0.15 : 0.35;
   if(!focusMode) return 1;
-  return a.rel.some(function(r){ return ['greeted','talked','joyHi','joyTalk','played'].includes(r); }) ? 1 : 0.22;
+  var isBest=classRels.some(function(r){ return ((r.a===-1&&r.b===a.id)||(r.a===a.id&&r.b===-1))&&r.type==='best'; });
+  return ((a.relScore||0)>0||isBest) ? 1 : 0.22;
   }
   ca.forEach(function(a){
   var p = netPos[a.id]; if(!p) return;
