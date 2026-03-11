@@ -1271,28 +1271,9 @@ function drawClassMap(){
       for(var i=0;i<allies.length;i++){var a=allies[i],p=mapPos[a.id];if(p&&Math.hypot(mx-p.x,my-p.y)<24)return a.id;}
       return null;
     }
-    canvas.addEventListener('touchstart',function(e){
-      var pos=_mpXY(e,true),hit=_mpHit(pos.x,pos.y);
-      if(hit==='joy'){e.preventDefault();return;}
-      if(hit!==null){
-        var p=mapPos[hit];if(!p)return;
-        _mapDrag={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};
-        e.preventDefault();
-      }
-    },{passive:false});
-    canvas.addEventListener('touchmove',function(e){
-      if(!_mapDrag)return;
-      e.preventDefault();
-      var pos=_mpXY(e,true);
-      mapPos[_mapDrag.id]={x:Math.max(16,Math.min(MAP_W-16,pos.x-_mapDrag.ox)),y:Math.max(16,Math.min(MAP_H-16,pos.y-_mapDrag.oy))};
-      _mapDrag.moved=true;
-      drawClassMap();
-    },{passive:false});
-    canvas.addEventListener('touchend',function(e){
-      if(!_mapDrag)return;
-      if(_mapDrag.moved){savePos();}
+    function _mpEnd(moved,hit){
+      if(moved){savePos();}
       else{
-        var hit=_mapDrag.id;
         if(mapMode==='view'||mapMode==='focus'){openUnivEdit(hit);}
         else{
           if(!editSelA){editSelA=hit;drawClassMap();showRelEdPrompt();}
@@ -1300,7 +1281,37 @@ function drawClassMap(){
           else{showRelEdFull(editSelA,hit);editSelA=null;}
         }
       }
-      _mapDrag=null;
+    }
+    // touch
+    canvas.addEventListener('touchstart',function(e){
+      var pos=_mpXY(e,true),hit=_mpHit(pos.x,pos.y);
+      if(hit==='joy'){e.preventDefault();return;}
+      if(hit!==null){var p=mapPos[hit];if(!p)return;_mapDrag={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};e.preventDefault();}
+    },{passive:false});
+    canvas.addEventListener('touchmove',function(e){
+      if(!_mapDrag)return;e.preventDefault();
+      var pos=_mpXY(e,true);
+      mapPos[_mapDrag.id]={x:Math.max(16,Math.min(MAP_W-16,pos.x-_mapDrag.ox)),y:Math.max(16,Math.min(MAP_H-16,pos.y-_mapDrag.oy))};
+      _mapDrag.moved=true;drawClassMap();
+    },{passive:false});
+    canvas.addEventListener('touchend',function(e){
+      if(!_mapDrag)return;_mpEnd(_mapDrag.moved,_mapDrag.id);_mapDrag=null;
+    });
+    // mouse (PC)
+    canvas.addEventListener('mousedown',function(e){
+      if(e.button!==0)return;
+      var pos=_mpXY(e,false),hit=_mpHit(pos.x,pos.y);
+      if(hit==='joy')return;
+      if(hit!==null){var p=mapPos[hit];if(!p)return;_mapDrag={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};e.preventDefault();}
+    });
+    document.addEventListener('mousemove',function(e){
+      if(!_mapDrag||!document.getElementById('tab-classmap').classList.contains('active'))return;
+      var pos=_mpXY(e,false);
+      mapPos[_mapDrag.id]={x:Math.max(16,Math.min(MAP_W-16,pos.x-_mapDrag.ox)),y:Math.max(16,Math.min(MAP_H-16,pos.y-_mapDrag.oy))};
+      _mapDrag.moved=true;drawClassMap();
+    });
+    document.addEventListener('mouseup',function(e){
+      if(!_mapDrag)return;_mpEnd(_mapDrag.moved,_mapDrag.id);_mapDrag=null;
     });
   }
   // ─────────────────────────────────────────────────────
@@ -1403,7 +1414,7 @@ function applyRel(a,b,type){
 function renderMapStats(){
   const ca=allies.filter(a=>a.cls==='class'),ea=allies.filter(a=>a.cls==='ext');
   const best=classRels.filter(r=>r.type==='best').length;
-  const jc=ca.filter(a=>(a.relScore||0)>0&&!a.hideLink).length;
+  const jc=ca.filter(a=>classRels.some(r=>((r.a===-1&&r.b===a.id)||(r.a===a.id&&r.b===-1))&&(r.type==='best'||r.type==='friend'))).length;
   const br=allies.filter(a=>a.groups.includes('bridge'));
   document.getElementById('mapStats').innerHTML=
   '<div class="stat-grid">'
