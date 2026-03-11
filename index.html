@@ -1197,21 +1197,21 @@ function drawClassMap(){
   ctx.lineWidth=isBest?3:1.5;ctx.setLineDash([]);ctx.stroke();
   if(isBest){const mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;ctx.font='10px serif';ctx.fillText('💕',mx-6,my+4);}
   });
-  ca.forEach(a=>{
+  // 꽃잎 지도 선: relScore 기반 (관계 없음 = 선 없음)
+  allies.forEach(a=>{
   const pos=mapPos[a.id];if(!pos)return;
-  const hasLink=a.rel.some(r=>['greeted','talked','joyHi','joyTalk','played'].includes(r));
-  if(!hasLink)return;
-  const isP=a.rel.includes('played');
+  const score=a.relScore||0;
+  const isBestM=classRels.some(r=>((r.a===-1&&r.b===a.id)||(r.a===a.id&&r.b===-1))&&r.type==='best');
+  if(score<=0&&!isBestM)return;
+  const lw=Math.max(1,Math.min(4,score/22));
+  const isExt=a.cls==='ext';
   ctx.beginPath();ctx.moveTo(mapPos['joy'].x,mapPos['joy'].y);ctx.lineTo(pos.x,pos.y);
-  ctx.strokeStyle=isP?'rgba(125,232,208,0.6)':'rgba(255,179,210,0.45)';
-  ctx.lineWidth=isP?2.5:1.5;ctx.setLineDash(isP?[]:[3,5]);ctx.stroke();ctx.setLineDash([]);
-  });
-  ea.forEach(a=>{
-  const pos=mapPos[a.id];if(!pos)return;
-  const hasLink=a.rel.some(r=>['greeted','talked','joyHi','joyTalk','played'].includes(r));
-  if(!hasLink)return;
-  ctx.beginPath();ctx.moveTo(mapPos['joy'].x,mapPos['joy'].y);ctx.lineTo(pos.x,pos.y);
-  ctx.strokeStyle='rgba(255,209,102,0.5)';ctx.lineWidth=2;ctx.setLineDash([3,7]);ctx.stroke();ctx.setLineDash([]);
+  if(isBestM){ctx.strokeStyle='rgba(255,133,179,0.8)';ctx.lineWidth=Math.max(lw,3);ctx.setLineDash([]);}
+  else if(score>=70){ctx.strokeStyle='rgba(255,133,179,0.7)';ctx.lineWidth=lw;ctx.setLineDash([]);}
+  else if(score>=40){ctx.strokeStyle='rgba(125,232,208,0.7)';ctx.lineWidth=lw;ctx.setLineDash([]);}
+  else if(isExt){ctx.strokeStyle='rgba(255,209,102,0.55)';ctx.lineWidth=lw;ctx.setLineDash([3,7]);}
+  else{ctx.strokeStyle='rgba(200,160,230,0.55)';ctx.lineWidth=lw;ctx.setLineDash([3,5]);}
+  ctx.stroke();ctx.setLineDash([]);
   });
   }
   ca.forEach(a=>{
@@ -1226,7 +1226,8 @@ function drawClassMap(){
   g.addColorStop(0,col+'66');g.addColorStop(1,col+'00');
   ctx.beginPath();ctx.arc(pos.x,pos.y,20,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
   drawFlower(ctx,pos.x,pos.y,10,col);
-  drawLabel(ctx, a.name.slice(0,4), pos.x, pos.y+26, {size:12, color: focused?'#2A0A40':'#5A3060'});
+  var _cang=Math.atan2(pos.y-MAP_CY, pos.x-MAP_CX);
+  drawLabel(ctx, a.name.slice(0,4), pos.x, pos.y, {size:12, color: focused?'#2A0A40':'#5A3060', angle:_cang, dist:22});
   if(isSel){ctx.beginPath();ctx.arc(pos.x,pos.y,20,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   ctx.globalAlpha=1;
   });
@@ -1239,7 +1240,8 @@ function drawClassMap(){
   ctx.beginPath();ctx.moveTo(pos.x,pos.y-11);ctx.lineTo(pos.x+10,pos.y);ctx.lineTo(pos.x,pos.y+11);ctx.lineTo(pos.x-10,pos.y);ctx.closePath();
   ctx.fillStyle='#FFD166';ctx.shadowBlur=8;ctx.shadowColor='rgba(255,200,50,.6)';ctx.fill();ctx.shadowBlur=0;
   ctx.strokeStyle='rgba(255,255,255,0.8)';ctx.lineWidth=1.5;ctx.stroke();
-  drawLabel(ctx, a.name.slice(0,5), pos.x, pos.y+26, {size:12, color:'#5A3000'});
+  var _eang=Math.atan2(pos.y-MAP_CY, pos.x-MAP_CX);
+  drawLabel(ctx, a.name.slice(0,5), pos.x, pos.y, {size:12, color:'#5A3000', angle:_eang, dist:22});
   if(editSelA===a.id){ctx.beginPath();ctx.arc(pos.x,pos.y,18,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   });
   const jp=mapPos['joy'];
@@ -1252,10 +1254,15 @@ function drawClassMap(){
   renderMapStats();
 }
 // 이름 라벨: 흰 배경 pill + 진한 텍스트 (roundRect 미지원 환경 호환)
-function drawLabel(ctx, text, x, y, opts){
+// opts.angle: 노드→라벨 방향(라디안). opts.dist: 노드 중심에서 라벨 중심까지 거리
+function drawLabel(ctx, text, nodeX, nodeY, opts){
   opts = opts || {};
   var fsize = opts.size || 12;
   var col   = opts.color || '#2A0A40';
+  var angle = (opts.angle !== undefined) ? opts.angle : Math.PI/2;
+  var dist  = opts.dist || 20;
+  var x = nodeX + Math.cos(angle) * dist;
+  var y = nodeY + Math.sin(angle) * dist;
   ctx.save();
   ctx.font = 'bold ' + fsize + 'px Noto Sans KR';
   ctx.textAlign = 'center';
@@ -1490,7 +1497,7 @@ function drawNetwork(){
   if(rs==='distant') return focusMode ? 0.15 : 0.35;
   if(!focusMode) return 1;
   var isBest=classRels.some(function(r){ return ((r.a===-1&&r.b===a.id)||(r.a===a.id&&r.b===-1))&&r.type==='best'; });
-  return ((a.relScore||0)>0||isBest) ? 1 : 0.22;
+  return ((a.relScore||0)>0||isBest) ? 1 : 0.55;
   }
   ca.forEach(function(a){
   var p = netPos[a.id]; if(!p) return;
@@ -1511,7 +1518,8 @@ function drawNetwork(){
   ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
   }
   drawFlower(ctx,p.x,p.y,10,col);
-  drawLabel(ctx, a.name.slice(0,4), p.x, p.y+26, {size:12, color:'#2A0A40'});
+  var _nang=Math.atan2(p.y-CY, p.x-CX);
+  drawLabel(ctx, a.name.slice(0,4), p.x, p.y, {size:12, color:'#2A0A40', angle:_nang, dist:22});
   if((a.relScore||0)>=70){
   ctx.font='11px serif'; ctx.fillText('💕',p.x,p.y-16);
   } else if((a.relScore||0)>=40){
@@ -1531,7 +1539,8 @@ function drawNetwork(){
   ctx.fillStyle = (netSelId===a.id) ? '#FF85B3' : '#FFD166';
   ctx.shadowBlur=8; ctx.shadowColor='rgba(255,200,50,.5)'; ctx.fill(); ctx.shadowBlur=0;
   ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=1.5; ctx.stroke();
-  drawLabel(ctx, a.name.slice(0,5), p.x, p.y+26, {size:12, color:'#5A3000'});
+  var _eang2=Math.atan2(p.y-CY, p.x-CX);
+  drawLabel(ctx, a.name.slice(0,5), p.x, p.y, {size:12, color:'#5A3000', angle:_eang2, dist:22});
   ctx.globalAlpha=1;
   });
   var jg=ctx.createRadialGradient(CX,CY,0,CX,CY,36);
