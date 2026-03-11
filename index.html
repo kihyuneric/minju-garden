@@ -57,7 +57,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--t
 .xpw{padding:5px 10px 9px;background:white;border-bottom:1px solid var(--border)}
 .xpb{height:9px;background:var(--pink3);border-radius:20px;overflow:hidden}
 .xpf{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--pink1),var(--lav1),var(--mint1));transition:width .6s;box-shadow:0 0 8px var(--pink2)}
-.tabs{display:flex;background:white;border-bottom:3px solid var(--pink2);overflow-x:auto;scrollbar-width:none}
+.tabs{display:flex;background:white;border-bottom:3px solid var(--pink2);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex-shrink:0;padding:11px 14px;font-size:12px;font-weight:900;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;transition:all .2s;font-family:'Noto Sans KR',sans-serif}
 .tab.active{color:var(--pink1);border-bottom-color:var(--pink1)}
@@ -354,7 +354,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--t
 .rel-history-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
 .rel-history-item:last-child{border:none}
 .rel-history-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:3px}
-#mapCanvas,#netCanvas{width:100%!important;height:auto!important;touch-action:pan-y pinch-zoom}
+#mapCanvas{width:100%!important;height:auto!important;touch-action:pan-y pinch-zoom}
+#netCanvas{width:100%!important;height:auto!important;touch-action:none}
 .mbox{padding:14px 14px 20px!important}
 .mtab{font-size:10px!important;padding:7px 3px!important}
 .rstat-btn{padding:6px!important}
@@ -439,14 +440,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;heigh
 </div>
 <div class="xpw"><div class="xpb"><div class="xpf" id="xpBar" style="width:0%"></div></div></div>
 <!-- TABS -->
-<div class="tabs">
-  <button class="tab active" onclick="gotoTab('allies',this)">🌸 친구 목록</button>
-  <button class="tab" onclick="gotoTab('classmap',this)">🗺️ 반 관계망</button>
-  <button class="tab" onclick="gotoTab('network',this)">🌺 꽃잎 지도</button>
-  <button class="tab" onclick="gotoTab('strategy',this)">💡 전략 분석</button>
-  <button class="tab" onclick="gotoTab('quests',this)">📜 미션</button>
-  <button class="tab" onclick="gotoTab('detective',this)">🔍 긍정 탐정</button>
-  <button class="tab" onclick="gotoTab('mindgame',this)">🌈 마음 탐험</button>
+<div style="position:relative">
+  <div class="tabs" id="tabBar">
+    <button class="tab active" onclick="gotoTab('allies',this)">🌸 친구 목록</button>
+    <button class="tab" onclick="gotoTab('classmap',this)">🗺️ 반 관계망</button>
+    <button class="tab" onclick="gotoTab('network',this)">🌺 꽃잎 지도</button>
+    <button class="tab" onclick="gotoTab('strategy',this)">💡 전략 분석</button>
+    <button class="tab" onclick="gotoTab('quests',this)">📜 미션</button>
+    <button class="tab" onclick="gotoTab('detective',this)">🔍 긍정 탐정</button>
+    <button class="tab" onclick="gotoTab('mindgame',this)">🌈 마음 탐험</button>
+  </div>
+  <div id="tabFade" style="position:absolute;right:0;top:0;bottom:3px;width:36px;background:linear-gradient(to right,transparent,white);pointer-events:none;transition:opacity .2s"></div>
 </div>
 <div class="content">
 <!-- ===== ALLIES ===== -->
@@ -1352,7 +1356,7 @@ function applyRel(a,b,type){
 function renderMapStats(){
   const ca=allies.filter(a=>a.cls==='class'),ea=allies.filter(a=>a.cls==='ext');
   const best=classRels.filter(r=>r.type==='best').length;
-  const jc=ca.filter(a=>a.rel.some(r=>['greeted','talked','joyHi','joyTalk','played'].includes(r))).length;
+  const jc=ca.filter(a=>(a.relScore||0)>0&&!a.hideLink).length;
   const br=allies.filter(a=>a.groups.includes('bridge'));
   document.getElementById('mapStats').innerHTML=
   '<div class="stat-grid">'
@@ -2997,6 +3001,14 @@ function closeUnivEdit() {
 function closeEditFullscreen() {
   closeUnivEdit();
 }
+// Tab bar scroll fade indicator
+document.addEventListener('DOMContentLoaded', function(){
+  var tb=document.getElementById('tabBar'), tf=document.getElementById('tabFade');
+  if(tb&&tf){
+    function _tabFade(){ tf.style.opacity=(tb.scrollLeft+tb.clientWidth>=tb.scrollWidth-4)?'0':'1'; }
+    tb.addEventListener('scroll',_tabFade); _tabFade();
+  }
+});
 // Close on overlay background tap
 document.addEventListener('DOMContentLoaded', function(){
   var overlay = document.getElementById('univEditOverlay');
