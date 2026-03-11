@@ -1204,8 +1204,12 @@ function drawClassMap(){
   g.addColorStop(0,col+'66');g.addColorStop(1,col+'00');
   ctx.beginPath();ctx.arc(pos.x,pos.y,20,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
   drawFlower(ctx,pos.x,pos.y,10,col);
-  ctx.fillStyle=focused?'#5A3060':'#C4A0D0';ctx.font='bold 8px Noto Sans KR';ctx.textAlign='center';
-  ctx.fillText(a.name.slice(0,4),pos.x,pos.y+22);
+  const _cnm=a.name.slice(0,4);
+  ctx.font='bold 10px Noto Sans KR';ctx.textAlign='center';
+  const _cnw=ctx.measureText(_cnm).width;
+  ctx.fillStyle='rgba(255,255,255,0.85)';
+  ctx.beginPath();ctx.roundRect(pos.x-_cnw/2-3,pos.y+13,_cnw+6,14,4);ctx.fill();
+  ctx.fillStyle=focused?'#3A1050':'#5A3060';ctx.fillText(_cnm,pos.x,pos.y+24);
   if(isSel){ctx.beginPath();ctx.arc(pos.x,pos.y,20,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   ctx.globalAlpha=1;
   });
@@ -1218,8 +1222,12 @@ function drawClassMap(){
   ctx.beginPath();ctx.moveTo(pos.x,pos.y-11);ctx.lineTo(pos.x+10,pos.y);ctx.lineTo(pos.x,pos.y+11);ctx.lineTo(pos.x-10,pos.y);ctx.closePath();
   ctx.fillStyle='#FFD166';ctx.shadowBlur=8;ctx.shadowColor='rgba(255,200,50,.6)';ctx.fill();ctx.shadowBlur=0;
   ctx.strokeStyle='rgba(255,255,255,0.8)';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle='#7A5500';ctx.font='bold 7px Noto Sans KR';ctx.textAlign='center';ctx.fillText(a.name.slice(0,3),pos.x,pos.y+3);
-  ctx.fillStyle='#B08000';ctx.font='bold 8px Noto Sans KR';ctx.fillText(a.name.slice(0,5),pos.x,pos.y+22);
+  const _enm=a.name.slice(0,5);
+  ctx.font='bold 10px Noto Sans KR';ctx.textAlign='center';
+  const _enw=ctx.measureText(_enm).width;
+  ctx.fillStyle='rgba(255,255,255,0.85)';
+  ctx.beginPath();ctx.roundRect(pos.x-_enw/2-3,pos.y+13,_enw+6,14,4);ctx.fill();
+  ctx.fillStyle='#5A3000';ctx.fillText(_enm,pos.x,pos.y+24);
   if(editSelA===a.id){ctx.beginPath();ctx.arc(pos.x,pos.y,18,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   });
   const jp=mapPos['joy'];
@@ -1348,29 +1356,40 @@ function drawNetwork(){
   });
   // ── 노드 겹침 방지: 반발력 시뮬레이션 ─────────────────
   var allNodeIds = Object.keys(netPos);
-  var MIN_NODE_DIST = 52;
-  var pad = 30;
-  for(var _iter=0;_iter<60;_iter++){
+  // 초기 미세 흔들기(대칭 배열 방지)
+  allNodeIds.forEach(function(k,i){
+    netPos[k].x += (i%2===0?1:-1)*(i%3+1)*0.5;
+    netPos[k].y += (i%2===0?-1:1)*(i%5+1)*0.5;
+  });
+  var MIN_NODE_DIST = 58;
+  var pad = 36;
+  for(var _iter=0;_iter<120;_iter++){
+    // 일반 노드 간 반발
     for(var _i=0;_i<allNodeIds.length;_i++){
       for(var _j=_i+1;_j<allNodeIds.length;_j++){
         var _pa=netPos[allNodeIds[_i]], _pb=netPos[allNodeIds[_j]];
         var _dx=_pb.x-_pa.x, _dy=_pb.y-_pa.y;
         var _d=Math.sqrt(_dx*_dx+_dy*_dy)||0.01;
         if(_d<MIN_NODE_DIST){
-          var _push=(MIN_NODE_DIST-_d)/2+1;
+          var _push=(MIN_NODE_DIST-_d)*0.6;
           var _nx=_dx/_d, _ny=_dy/_d;
           _pa.x-=_nx*_push; _pa.y-=_ny*_push;
           _pb.x+=_nx*_push; _pb.y+=_ny*_push;
         }
       }
+      // 중심(민주)과의 반발
+      var _pc=netPos[allNodeIds[_i]];
+      var _cdx=_pc.x-CX, _cdy=_pc.y-CY;
+      var _cd=Math.sqrt(_cdx*_cdx+_cdy*_cdy)||0.01;
+      if(_cd<MIN_NODE_DIST){
+        var _cp=(MIN_NODE_DIST-_cd)*0.6;
+        _pc.x+=(_cdx/_cd)*_cp; _pc.y+=(_cdy/_cd)*_cp;
+      }
+      // 매 반복 경계 클램프
+      _pc.x=Math.max(pad,Math.min(W-pad,_pc.x));
+      _pc.y=Math.max(pad,Math.min(H-pad,_pc.y));
     }
   }
-  // 캔버스 경계 안으로 클램프
-  allNodeIds.forEach(function(k){
-    var _p=netPos[k];
-    _p.x=Math.max(pad,Math.min(W-pad,_p.x));
-    _p.y=Math.max(pad,Math.min(H-pad,_p.y));
-  });
   // ────────────────────────────────────────────────────
   if(ea.length){
   ctx.beginPath(); ctx.arc(CX,CY,oR+10,0,Math.PI*2);
@@ -1447,8 +1466,13 @@ function drawNetwork(){
   ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
   }
   drawFlower(ctx,p.x,p.y,10,col);
-  ctx.fillStyle='#5A3060'; ctx.font='bold 8px Noto Sans KR'; ctx.textAlign='center';
-  ctx.fillText(a.name.slice(0,4),p.x,p.y+22);
+  // 이름 배경 + 텍스트
+  var _nm=a.name.slice(0,4);
+  ctx.font='bold 10px Noto Sans KR'; ctx.textAlign='center';
+  var _nw=ctx.measureText(_nm).width;
+  ctx.fillStyle='rgba(255,255,255,0.82)';
+  ctx.beginPath(); ctx.roundRect(p.x-_nw/2-3,p.y+13,_nw+6,14,4); ctx.fill();
+  ctx.fillStyle='#3A1050'; ctx.fillText(_nm,p.x,p.y+24);
   if((a.relScore||0)>=70){
   ctx.font='11px serif'; ctx.fillText('💕',p.x,p.y-16);
   } else if((a.relScore||0)>=40){
@@ -1468,8 +1492,13 @@ function drawNetwork(){
   ctx.fillStyle = (netSelId===a.id) ? '#FF85B3' : '#FFD166';
   ctx.shadowBlur=8; ctx.shadowColor='rgba(255,200,50,.5)'; ctx.fill(); ctx.shadowBlur=0;
   ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=1.5; ctx.stroke();
-  ctx.fillStyle='#7A5500'; ctx.font='bold 8px Noto Sans KR'; ctx.textAlign='center';
-  ctx.fillText(a.name.slice(0,5),p.x,p.y+21);
+  // 이름 배경 + 텍스트
+  var _enm=a.name.slice(0,5);
+  ctx.font='bold 10px Noto Sans KR'; ctx.textAlign='center';
+  var _enw=ctx.measureText(_enm).width;
+  ctx.fillStyle='rgba(255,255,255,0.82)';
+  ctx.beginPath(); ctx.roundRect(p.x-_enw/2-3,p.y+13,_enw+6,14,4); ctx.fill();
+  ctx.fillStyle='#5A3000'; ctx.fillText(_enm,p.x,p.y+24);
   ctx.globalAlpha=1;
   });
   var jg=ctx.createRadialGradient(CX,CY,0,CX,CY,36);
