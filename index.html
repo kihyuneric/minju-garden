@@ -1122,6 +1122,28 @@ function initMapPos(){
   y: clamp(MAP_CY + r*Math.sin(ang), 16, MAP_H-16)
   };
   });
+  // ── 꽃잎 지도 겹침 방지 반발력 ────────────────────────
+  var _mapIds = Object.keys(mapPos).filter(function(k){ return k !== 'joy'; });
+  var _MAP_MIN = 56, _MAP_PAD = 32;
+  for(var _mi=0;_mi<100;_mi++){
+    for(var _ma=0;_ma<_mapIds.length;_ma++){
+      for(var _mb=_ma+1;_mb<_mapIds.length;_mb++){
+        var _mpa=mapPos[_mapIds[_ma]], _mpb=mapPos[_mapIds[_mb]];
+        var _mdx=_mpb.x-_mpa.x, _mdy=_mpb.y-_mpa.y;
+        var _md=Math.sqrt(_mdx*_mdx+_mdy*_mdy)||0.01;
+        if(_md<_MAP_MIN){
+          var _mp=(_MAP_MIN-_md)*0.55;
+          var _mnx=_mdx/_md, _mny=_mdy/_md;
+          _mpa.x-=_mnx*_mp; _mpa.y-=_mny*_mp;
+          _mpb.x+=_mnx*_mp; _mpb.y+=_mny*_mp;
+        }
+      }
+      var _mpc=mapPos[_mapIds[_ma]];
+      _mpc.x=Math.max(_MAP_PAD,Math.min(MAP_W-_MAP_PAD,_mpc.x));
+      _mpc.y=Math.max(_MAP_PAD,Math.min(MAP_H-_MAP_PAD,_mpc.y));
+    }
+  }
+  // ────────────────────────────────────────────────────
   savePos(); // 초기 배치 후 즉시 저장
 }
 function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
@@ -1204,12 +1226,7 @@ function drawClassMap(){
   g.addColorStop(0,col+'66');g.addColorStop(1,col+'00');
   ctx.beginPath();ctx.arc(pos.x,pos.y,20,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
   drawFlower(ctx,pos.x,pos.y,10,col);
-  const _cnm=a.name.slice(0,4);
-  ctx.font='bold 10px Noto Sans KR';ctx.textAlign='center';
-  const _cnw=ctx.measureText(_cnm).width;
-  ctx.fillStyle='rgba(255,255,255,0.85)';
-  ctx.beginPath();ctx.roundRect(pos.x-_cnw/2-3,pos.y+13,_cnw+6,14,4);ctx.fill();
-  ctx.fillStyle=focused?'#3A1050':'#5A3060';ctx.fillText(_cnm,pos.x,pos.y+24);
+  drawLabel(ctx, a.name.slice(0,4), pos.x, pos.y+26, {size:12, color: focused?'#2A0A40':'#5A3060'});
   if(isSel){ctx.beginPath();ctx.arc(pos.x,pos.y,20,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   ctx.globalAlpha=1;
   });
@@ -1222,12 +1239,7 @@ function drawClassMap(){
   ctx.beginPath();ctx.moveTo(pos.x,pos.y-11);ctx.lineTo(pos.x+10,pos.y);ctx.lineTo(pos.x,pos.y+11);ctx.lineTo(pos.x-10,pos.y);ctx.closePath();
   ctx.fillStyle='#FFD166';ctx.shadowBlur=8;ctx.shadowColor='rgba(255,200,50,.6)';ctx.fill();ctx.shadowBlur=0;
   ctx.strokeStyle='rgba(255,255,255,0.8)';ctx.lineWidth=1.5;ctx.stroke();
-  const _enm=a.name.slice(0,5);
-  ctx.font='bold 10px Noto Sans KR';ctx.textAlign='center';
-  const _enw=ctx.measureText(_enm).width;
-  ctx.fillStyle='rgba(255,255,255,0.85)';
-  ctx.beginPath();ctx.roundRect(pos.x-_enw/2-3,pos.y+13,_enw+6,14,4);ctx.fill();
-  ctx.fillStyle='#5A3000';ctx.fillText(_enm,pos.x,pos.y+24);
+  drawLabel(ctx, a.name.slice(0,5), pos.x, pos.y+26, {size:12, color:'#5A3000'});
   if(editSelA===a.id){ctx.beginPath();ctx.arc(pos.x,pos.y,18,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   });
   const jp=mapPos['joy'];
@@ -1238,6 +1250,39 @@ function drawClassMap(){
   ctx.fillStyle='#5A3060';ctx.font='bold 10px Noto Sans KR';ctx.textAlign='center';ctx.fillText('민주',jp.x,jp.y+28);
   if(editSelA==='joy'){ctx.beginPath();ctx.arc(jp.x,jp.y,24,0,Math.PI*2);ctx.strokeStyle='#FF85B3';ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   renderMapStats();
+}
+// 이름 라벨: 흰 배경 pill + 진한 텍스트 (roundRect 미지원 환경 호환)
+function drawLabel(ctx, text, x, y, opts){
+  opts = opts || {};
+  var fsize = opts.size || 12;
+  var col   = opts.color || '#2A0A40';
+  ctx.save();
+  ctx.font = 'bold ' + fsize + 'px Noto Sans KR';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var tw = ctx.measureText(text).width;
+  var pw = tw + 10, ph = fsize + 6, r2 = (ph/2);
+  var lx = x - pw/2, ly = y - ph/2;
+  // 수동 rounded rect (호환성)
+  ctx.beginPath();
+  ctx.moveTo(lx+r2, ly);
+  ctx.lineTo(lx+pw-r2, ly);
+  ctx.arcTo(lx+pw, ly, lx+pw, ly+ph, r2);
+  ctx.lineTo(lx+pw, ly+ph-r2);
+  ctx.arcTo(lx+pw, ly+ph, lx+pw-r2, ly+ph, r2);
+  ctx.lineTo(lx+r2, ly+ph);
+  ctx.arcTo(lx, ly+ph, lx, ly+ph-r2, r2);
+  ctx.lineTo(lx, ly+r2);
+  ctx.arcTo(lx, ly, lx+r2, ly, r2);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.shadowColor = 'rgba(0,0,0,0.12)';
+  ctx.shadowBlur = 3;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = col;
+  ctx.fillText(text, x, y);
+  ctx.restore();
 }
 function drawFlower(ctx,cx,cy,r,col){
   for(let i=0;i<5;i++){
@@ -1466,13 +1511,7 @@ function drawNetwork(){
   ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
   }
   drawFlower(ctx,p.x,p.y,10,col);
-  // 이름 배경 + 텍스트
-  var _nm=a.name.slice(0,4);
-  ctx.font='bold 10px Noto Sans KR'; ctx.textAlign='center';
-  var _nw=ctx.measureText(_nm).width;
-  ctx.fillStyle='rgba(255,255,255,0.82)';
-  ctx.beginPath(); ctx.roundRect(p.x-_nw/2-3,p.y+13,_nw+6,14,4); ctx.fill();
-  ctx.fillStyle='#3A1050'; ctx.fillText(_nm,p.x,p.y+24);
+  drawLabel(ctx, a.name.slice(0,4), p.x, p.y+26, {size:12, color:'#2A0A40'});
   if((a.relScore||0)>=70){
   ctx.font='11px serif'; ctx.fillText('💕',p.x,p.y-16);
   } else if((a.relScore||0)>=40){
@@ -1492,13 +1531,7 @@ function drawNetwork(){
   ctx.fillStyle = (netSelId===a.id) ? '#FF85B3' : '#FFD166';
   ctx.shadowBlur=8; ctx.shadowColor='rgba(255,200,50,.5)'; ctx.fill(); ctx.shadowBlur=0;
   ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=1.5; ctx.stroke();
-  // 이름 배경 + 텍스트
-  var _enm=a.name.slice(0,5);
-  ctx.font='bold 10px Noto Sans KR'; ctx.textAlign='center';
-  var _enw=ctx.measureText(_enm).width;
-  ctx.fillStyle='rgba(255,255,255,0.82)';
-  ctx.beginPath(); ctx.roundRect(p.x-_enw/2-3,p.y+13,_enw+6,14,4); ctx.fill();
-  ctx.fillStyle='#5A3000'; ctx.fillText(_enm,p.x,p.y+24);
+  drawLabel(ctx, a.name.slice(0,5), p.x, p.y+26, {size:12, color:'#5A3000'});
   ctx.globalAlpha=1;
   });
   var jg=ctx.createRadialGradient(CX,CY,0,CX,CY,36);
