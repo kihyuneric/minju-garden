@@ -1257,7 +1257,7 @@ function drawClassMap(){
   ctx.fillStyle='#5A3060';ctx.font='bold 10px Noto Sans KR';ctx.textAlign='center';ctx.fillText('민주',jp.x,jp.y+28);
   if(editSelA==='joy'){ctx.beginPath();ctx.arc(jp.x,jp.y,24,0,Math.PI*2);ctx.strokeStyle='#FF85B3';ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
   renderMapStats();
-  // ── 반 관계망 드래그 핸들러 (한 번만 등록) ─────────────
+  // ── 반 관계망 드래그+탭 핸들러 (한 번만 등록) ────────────
   if(!canvas._mapHandlers){
     canvas._mapHandlers=true;
     var _mapDrag=null;
@@ -1271,22 +1271,25 @@ function drawClassMap(){
       for(var i=0;i<allies.length;i++){var a=allies[i],p=mapPos[a.id];if(p&&Math.hypot(mx-p.x,my-p.y)<24)return a.id;}
       return null;
     }
-    function _mpEnd(moved,hit){
-      if(moved){savePos();}
-      else{
-        if(mapMode==='view'||mapMode==='focus'){openUnivEdit(hit);}
-        else{
-          if(!editSelA){editSelA=hit;drawClassMap();showRelEdPrompt();}
-          else if(editSelA===hit){editSelA=null;document.getElementById('relEd').style.display='none';drawClassMap();}
-          else{showRelEdFull(editSelA,hit);editSelA=null;}
-        }
+    function _mapTap(cid){
+      if(mapMode==='view'||mapMode==='focus'){
+        if(cid==='joy') openModal('joy');
+        else if(cid!==null) openUnivEdit(cid);
+        return;
       }
+      if(!cid){editSelA=null;document.getElementById('relEd').style.display='none';drawClassMap();return;}
+      if(!editSelA){editSelA=cid;drawClassMap();showRelEdPrompt();return;}
+      if(editSelA===cid){editSelA=null;document.getElementById('relEd').style.display='none';drawClassMap();return;}
+      showRelEdFull(editSelA,cid);editSelA=null;
     }
-    // touch
+    // ── touch: 친구 노드만 preventDefault(drag용), joy/빈공간은 click 이벤트로 처리 ──
     canvas.addEventListener('touchstart',function(e){
       var pos=_mpXY(e,true),hit=_mpHit(pos.x,pos.y);
-      if(hit==='joy'){e.preventDefault();return;}
-      if(hit!==null){var p=mapPos[hit];if(!p)return;_mapDrag={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};e.preventDefault();}
+      if(hit!==null&&hit!=='joy'){
+        var p=mapPos[hit];if(!p)return;
+        _mapDrag={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};
+        e.preventDefault();
+      }
     },{passive:false});
     canvas.addEventListener('touchmove',function(e){
       if(!_mapDrag)return;e.preventDefault();
@@ -1295,14 +1298,18 @@ function drawClassMap(){
       _mapDrag.moved=true;drawClassMap();
     },{passive:false});
     canvas.addEventListener('touchend',function(e){
-      if(!_mapDrag)return;_mpEnd(_mapDrag.moved,_mapDrag.id);_mapDrag=null;
+      if(!_mapDrag)return;
+      if(_mapDrag.moved) savePos(); else _mapTap(_mapDrag.id);
+      _mapDrag=null;
     });
-    // mouse (PC)
+    // ── mouse(PC): 친구 노드 drag, 탭 처리. joy/빈공간은 click 이벤트로 처리 ──
+    // _mapBlockClick: PC에서 mouseup이 tap을 처리했을 때 click 이벤트 중복 방지
     canvas.addEventListener('mousedown',function(e){
       if(e.button!==0)return;
       var pos=_mpXY(e,false),hit=_mpHit(pos.x,pos.y);
-      if(hit==='joy')return;
-      if(hit!==null){var p=mapPos[hit];if(!p)return;_mapDrag={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};e.preventDefault();}
+      if(hit==='joy'||hit===null)return; // click 이벤트에 위임
+      var p=mapPos[hit];if(!p)return;
+      _mapDrag={id:hit,ox:pos.x-p.x,oy:pos.y-p.y,moved:false};
     });
     document.addEventListener('mousemove',function(e){
       if(!_mapDrag||!document.getElementById('tab-classmap').classList.contains('active'))return;
@@ -1311,7 +1318,12 @@ function drawClassMap(){
       _mapDrag.moved=true;drawClassMap();
     });
     document.addEventListener('mouseup',function(e){
-      if(!_mapDrag)return;_mpEnd(_mapDrag.moved,_mapDrag.id);_mapDrag=null;
+      if(!_mapDrag)return;
+      if(_mapDrag.moved) savePos(); else _mapTap(_mapDrag.id);
+      canvas._mapBlockClick=true; // click 이벤트 중복 방지
+      _mapDrag=null;
+    });
+  }
     });
   }
   // ─────────────────────────────────────────────────────
@@ -1367,6 +1379,8 @@ function drawFlower(ctx,cx,cy,r,col){
   ctx.fillStyle=col;ctx.fill();
 }
 document.getElementById('mapCanvas').addEventListener('click',function(e){
+  // PC mouseup이 이미 처리한 경우 중복 실행 방지
+  if(this._mapBlockClick){this._mapBlockClick=false;return;}
   const rect=this.getBoundingClientRect();
   const sx=this.width/rect.width,sy=this.height/rect.height;
   const mx=(e.clientX-rect.left)*sx,my=(e.clientY-rect.top)*sy;
